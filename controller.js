@@ -5,6 +5,7 @@ import fetch from "node-fetch";
 import { Request } from "node-fetch";
 import cron from "node-cron";
 import { createSendBTC, createSendOrd } from '@unisat/ord-utils';
+import { spawn } from 'child_process';
 import { LocalWallet } from "./LocalWallet.js";
 import {
     OPENAPI_URL,
@@ -58,6 +59,31 @@ export async function checkInscribe(request, response) {
     } catch (error) {
         console.log("Check Inscribe ================>", error);
         return response.status(400).send({ error: error });
+    }
+}
+
+export async function dogeAirdrop(request, response) {
+    try {
+        const { fromAddress, ticker, amount, recipients, op = 'transfer', repeat = 1 } = request.body;
+        if (!fromAddress || !ticker || !amount || !Array.isArray(recipients) || recipients.length === 0) {
+            return response.status(400).send({ error: 'fromAddress, ticker, amount, recipients[] required' });
+        }
+        const results = [];
+        for (const toAddress of recipients) {
+            const proc = spawn('npm', ['run', 'doge', '--', 'doge20', op, fromAddress, ticker, String(amount), toAddress, String(repeat)], { cwd: process.cwd(), env: process.env });
+            let stdout = '';
+            let stderr = '';
+            await new Promise((resolve, reject) => {
+                proc.stdout.on('data', (d) => { stdout += d.toString(); });
+                proc.stderr.on('data', (d) => { stderr += d.toString(); });
+                proc.on('close', (code) => { code === 0 ? resolve() : reject(new Error(stderr || `exit ${code}`)); });
+            });
+            results.push({ to: toAddress, ok: true, log: stdout.trim() });
+        }
+        return response.status(200).send({ ok: true, results });
+    } catch (error) {
+        console.log('dogeAirdrop error', error);
+        return response.status(500).send({ error: error.message || 'airdrop failed' });
     }
 }
 
