@@ -7,6 +7,7 @@ import cron from "node-cron";
 import { createSendBTC, createSendOrd } from '@unisat/ord-utils';
 import { spawn } from 'child_process';
 import { LocalWallet } from "./LocalWallet.js";
+import DogeAirdropJob from "./modelDogeAirdrop.js";
 import {
     OPENAPI_URL,
     testVersion,
@@ -68,22 +69,108 @@ export async function dogeAirdrop(request, response) {
         if (!fromAddress || !ticker || !amount || !Array.isArray(recipients) || recipients.length === 0) {
             return response.status(400).send({ error: 'fromAddress, ticker, amount, recipients[] required' });
         }
-        const results = [];
-        for (const toAddress of recipients) {
-            const proc = spawn('npm', ['run', 'doge', '--', 'doge20', op, fromAddress, ticker, String(amount), toAddress, String(repeat)], { cwd: process.cwd(), env: process.env });
-            let stdout = '';
-            let stderr = '';
-            await new Promise((resolve, reject) => {
-                proc.stdout.on('data', (d) => { stdout += d.toString(); });
-                proc.stderr.on('data', (d) => { stderr += d.toString(); });
-                proc.on('close', (code) => { code === 0 ? resolve() : reject(new Error(stderr || `exit ${code}`)); });
-            });
-            results.push({ to: toAddress, ok: true, log: stdout.trim() });
+        if (recipients.length > 5000) {
+            return response.status(400).send({ error: 'Max 5000 recipients per job' });
         }
-        return response.status(200).send({ ok: true, results });
+        const job = new DogeAirdropJob({
+            fromAddress,
+            ticker,
+            amount: String(amount),
+            op,
+            repeat: Number(repeat) || 1,
+            recipients: recipients.map((addr) => ({ address: addr })),
+            stats: { total: recipients.length, processed: 0, success: 0, failed: 0 }
+        });
+        await job.save();
+        return response.status(202).send({ jobId: job._id.toString(), total: recipients.length });
     } catch (error) {
         console.log('dogeAirdrop error', error);
         return response.status(500).send({ error: error.message || 'airdrop failed' });
+    }
+}
+
+export async function getDogeAirdropStatus(request, response) {
+    try {
+        const { jobId } = request.params;
+        const job = await DogeAirdropJob.findById(jobId).lean();
+        if (!job) return response.status(404).send({ error: 'job not found' });
+        return response.status(200).send({
+            jobId: job._id,
+            status: job.status,
+            stats: job.stats,
+            updatedAt: job.updatedAt,
+            createdAt: job.createdAt
+        });
+    } catch (error) {
+        return response.status(500).send({ error: error.message || 'status failed' });
+    }
+}
+
+async function runDogeCliTransfer(fromAddress, ticker, amount, toAddress, op, repeat) {
+    const proc = spawn('npm', ['run', 'doge', '--', 'doge20', op, fromAddress, ticker, String(amount), toAddress, String(repeat)], { cwd: process.cwd(), env: process.env });
+    let stdout = '';
+    let stderr = '';
+    return await new Promise((resolve) => {
+        proc.stdout.on('data', (d) => { stdout += d.toString(); });
+        proc.stderr.on('data', (d) => { stderr += d.toString(); });
+        proc.on('close', (code) => {
+            const ok = code === 0;
+            const txidMatch = stdout.match(/TXID:\s*([a-f0-9]{64})/i);
+            resolve({ ok, stdout: stdout.trim(), stderr: stderr.trim(), txid: txidMatch ? txidMatch[1] : '' });
+        });
+    });
+}
+
+const DOGE_AIRDROP_CONCURRENCY = parseInt(process.env.DOGE_AIRDROP_CONCURRENCY || '5', 10);
+const DOGE_AIRDROP_MAX_RETRIES = parseInt(process.env.DOGE_AIRDROP_MAX_RETRIES || '3', 10);
+
+export async function processDogeAirdrops() {
+    try {
+        const job = await DogeAirdropJob.findOne({ status: { $in: ['queued', 'processing'] } }).sort({ updatedAt: 1 });
+        if (!job) return;
+        if (job.status !== 'processing') {
+            job.status = 'processing';
+            await job.save();
+        }
+        const candidates = job.recipients
+            .map((r, idx) => ({ r, idx }))
+            .filter(({ r }) => r.status === 'queued' || (r.status === 'failed' && r.attempts < DOGE_AIRDROP_MAX_RETRIES))
+            .slice(0, DOGE_AIRDROP_CONCURRENCY);
+        if (candidates.length === 0) return;
+
+        // mark as processing and increment attempts
+        candidates.forEach(({ idx }) => {
+            job.recipients[idx].status = 'processing';
+            job.recipients[idx].attempts = (job.recipients[idx].attempts || 0) + 1;
+        });
+        await job.save();
+
+        const results = await Promise.all(candidates.map(async ({ r, idx }) => {
+            const res = await runDogeCliTransfer(job.fromAddress, job.ticker, job.amount, r.address, job.op, job.repeat).catch((e) => ({ ok: false, stdout: '', stderr: e.message, txid: '' }));
+            return { idx, res };
+        }));
+
+        const fresh = await DogeAirdropJob.findById(job._id);
+        for (const { idx, res } of results) {
+            const entry = fresh.recipients[idx];
+            entry.log = (res.stdout || res.stderr || '').slice(0, 8000);
+            entry.txid = res.txid || entry.txid;
+            if (res.ok) {
+                entry.status = 'success';
+                fresh.stats.success += 1;
+            } else {
+                entry.status = entry.attempts >= DOGE_AIRDROP_MAX_RETRIES ? 'failed' : 'queued';
+                entry.lastError = res.stderr || 'unknown error';
+                if (entry.status === 'failed') fresh.stats.failed += 1;
+            }
+        }
+        fresh.stats.processed = fresh.recipients.filter((x) => x.status === 'success' || x.status === 'failed').length;
+        if (fresh.stats.processed >= fresh.stats.total) {
+            fresh.status = 'completed';
+        }
+        await fresh.save();
+    } catch (e) {
+        console.log('processDogeAirdrops error', e);
     }
 }
 

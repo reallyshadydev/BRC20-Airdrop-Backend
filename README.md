@@ -33,3 +33,9 @@ Body example:
 ```
 
 Returns a per-recipient log summary.
+
+Large Airdrops (up to 5000 recipients)
+
+- Create job: POST `/api/doge/airdrop` with up to 5000 addresses. Response includes `jobId`.
+- Poll status: GET `/api/doge/airdrop/{jobId}` to retrieve progress and counts.
+- Concurrency is configurable via `DOGE_AIRDROP_CONCURRENCY` in `.env`.
