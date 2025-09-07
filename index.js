@@ -50,17 +50,12 @@ mongoose
     process.exit();
   });
 
-app.get('/', (request, response) => {
-  response.send('<h1>Phonebook</h1>')
-});
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = dirname(__filename);
-
-// app.use(express.static(path.join(__dirname, "./frontend")));
-// app.get("*", (req, res) =>
-//   res.sendFile(path.join(__dirname, "./frontend/index.html"))
-// );
+// Static frontend
+app.use('/frontend', express.static(path.join(__dirname, './frontend')));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, './frontend/index.html')));
 
 app.use("/api", routes);
 
