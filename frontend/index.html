@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DRC-20 Airdrop Tool</title>
+    <link rel="stylesheet" href="/frontend/styles.css">
+  </head>
+  <body>
+    <div class="container">
+      <h1>DRC-20 Airdrop Tool</h1>
+
+      <form id="airdrop-form">
+        <div class="field">
+          <label for="fromAddress">From Address</label>
+          <input type="text" id="fromAddress" name="fromAddress" placeholder="D..." required>
+        </div>
+        <div class="field two-col">
+          <div>
+            <label for="ticker">Ticker</label>
+            <input type="text" id="ticker" name="ticker" placeholder="TEST" maxlength="4" required>
+          </div>
+          <div>
+            <label for="amount">Amount</label>
+            <input type="text" id="amount" name="amount" placeholder="1000" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="op">Operation</label>
+          <select id="op" name="op">
+            <option value="transfer" selected>transfer</option>
+            <option value="mint">mint</option>
+          </select>
+        </div>
+        <div class="field two-col">
+          <div>
+            <label for="repeat">Repeat</label>
+            <input type="number" id="repeat" name="repeat" value="1" min="1">
+          </div>
+          <div>
+            <label for="recipients">Recipients (one per line)</label>
+            <textarea id="recipients" name="recipients" rows="8" placeholder="Daddr1\nDaddr2" required></textarea>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" id="submit-btn">Create Airdrop Job</button>
+        </div>
+      </form>
+
+      <section id="job-section" class="hidden">
+        <h2>Job Status</h2>
+        <div class="job-line"><span class="label">Job ID:</span> <code id="job-id"></code></div>
+        <div class="job-line"><span class="label">Status:</span> <span id="job-status">-</span></div>
+        <div class="job-line"><span class="label">Progress:</span> <span id="job-progress">0/0</span></div>
+        <div class="progress-bar"><div id="progress-fill" style="width:0%"></div></div>
+        <div id="job-errors" class="errors"></div>
+      </section>
+
+      <footer>
+        <small>Backend: <code id="backend-url"></code></small>
+      </footer>
+    </div>
+
+    <script src="/frontend/app.js"></script>
+  </body>
+  </html>
+

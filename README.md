@@ -33,6 +33,18 @@ npm start
 
 The server runs on port 5000 by default and exposes REST endpoints under `/api`.
 
+### Frontend UI
+
+A minimal web UI is available and served by Express.
+
+- Open `http://localhost:5000/` to load the UI
+- Static assets are under `frontend/`
+- The UI lets you:
+  - Submit a new airdrop job (`POST /api/doge/airdrop`)
+  - Automatically poll job progress (`GET /api/doge/airdrop/:jobId`)
+
+If your API is behind a different host/port/proxy, adjust the base URL in `frontend/app.js` as needed.
+
 ### Environment Variables
 
 See `.env.example` for a complete reference. Key settings:
