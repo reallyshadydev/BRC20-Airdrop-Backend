@@ -1,22 +1,41 @@
-# BRC20-Withdraw-Backend
-# brc20-backend
-# brc20-backend
-# BRC20-withdraw-Backend
+## DRC-20 Airdrop Backend
 
-in frontend.
+Dogecoin DRC-20 airdrop support is available via CLI and REST.
 
-src/config.ts
-testVersion = false : mainnet
-testversion = true : testnet
+Setup
 
-src/App.tsx
+- Copy `.env.example` to `.env` and set Dogecoin RPC credentials
+- Run a Dogecoin full node with RPC enabled
+- Create a Doge wallet if needed: `npm run doge -- wallet new`
 
-const [network, setNetwork] = useLocalStorage<BitcoinNetworkType>(
-"xversenetwork",
-BitcoinNetworkType.Mainnet
-); : mainnet
+CLI
 
-const [network, setNetwork] = useLocalStorage<BitcoinNetworkType>(
-"xversenetwork",
-BitcoinNetworkType.Testnet
-); : testnet
+- Deploy: `npm run doge -- doge20 deploy <inscribeToAddress> <TICK> <max> <limit> [decimals]`
+- Mint: `npm run doge -- doge20 mint <inscribeToAddress> <TICK> <amount> [repeat]`
+- Transfer: `npm run doge -- doge20 transfer <inscribeToAddress> <TICK> <amount> <toAddress> [repeat]`
+- Wallet: `npm run doge -- wallet balance|sync|split|send ...`
+
+REST Airdrop
+
+POST `/api/doge/airdrop`
+
+Body example:
+
+```
+{
+  "fromAddress": "Dxxxxx...",
+  "ticker": "TEST",
+  "amount": "1000",
+  "recipients": ["Daddr1", "Daddr2"],
+  "op": "transfer",
+  "repeat": 1
+}
+```
+
+Returns a per-recipient log summary.
+
+Large Airdrops (up to 5000 recipients)
+
+- Create job: POST `/api/doge/airdrop` with up to 5000 addresses. Response includes `jobId`.
+- Poll status: GET `/api/doge/airdrop/{jobId}` to retrieve progress and counts.
+- Concurrency is configurable via `DOGE_AIRDROP_CONCURRENCY` in `.env`.

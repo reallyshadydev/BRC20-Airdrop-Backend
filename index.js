@@ -8,6 +8,8 @@ import { fileURLToPath } from "url";
 import bodyParser from "body-parser";
 import routes from "./routes.js";
 import InscribeSchema from "./model.js";
+import cron from "node-cron";
+import { } from "./controller.js";
 
 import { SERVER_URL } from "./config.js";
 
@@ -61,3 +63,18 @@ app.get('/', (request, response) => {
 // );
 
 app.use("/api", routes);
+
+// Background processor for Doge airdrops (every 5 seconds)
+cron.schedule('*/5 * * * * *', async () => {
+  try {
+    const mod = await import('./controller.js');
+    if (mod && mod.default) {
+      // no-op
+    }
+    if (mod && typeof mod.processDogeAirdrops === 'function') {
+      await mod.processDogeAirdrops();
+    }
+  } catch (e) {
+    console.log('processor tick error', e);
+  }
+});
